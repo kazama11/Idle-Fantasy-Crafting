@@ -5340,7 +5340,7 @@ saveState(); renderPreserveFocus(); };
   // -------------------- NAV: History + Breadcrumbs (Sprint 19) --------------------
   // TS: We keep a tiny, explainable navigation history so "Back" feels app-native.
   // The history is linear (like a browser): jumping after going back truncates the forward stack.
-  let __NAV_APPLY = false; // guards against recursive history writes while applying history entries
+  var __NAV_APPLY = false; // guards against recursive history writes while applying history entries
 
   /**
    * TS: @typedef {Object} NavEntry
