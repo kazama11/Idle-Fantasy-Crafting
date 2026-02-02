@@ -5079,6 +5079,128 @@ const UIMODES = [
   { id:"meta", label:"Meta" },
 ];
 
+// -------------------- NAV: History + Breadcrumbs (Sprint 19) --------------------
+// TS: We keep a tiny, explainable navigation history so "Back" feels app-native.
+// The history is linear (like a browser): jumping after going back truncates the forward stack.
+let __NAV_APPLY = false; // guards against recursive history writes while applying history entries
+
+/**
+ * TS: @typedef {Object} NavEntry
+ * @property {"entity"|"character"|"rule"|"pack"|"mode"} kind
+ * @property {string} id
+ * @property {string} label
+ * @property {string=} sub
+ * @property {string=} at  ISO timestamp
+ */
+
+function navHistPush(entry){
+  const nav = state.ui.nav = state.ui.nav || { recent: [] };
+  nav.history = Array.isArray(nav.history) ? nav.history : [];
+  nav.index = (typeof nav.index === "number") ? nav.index : (nav.history.length ? nav.history.length - 1 : -1);
+
+  const cur = nav.history[nav.index];
+  if (cur && cur.kind === entry.kind && cur.id === entry.id) return;
+
+  // truncate forward stack
+  if (nav.index < nav.history.length - 1) nav.history = nav.history.slice(0, nav.index + 1);
+
+  nav.history.push({ ...entry, at: nowISO() });
+
+  // cap (keep UI snappy + storage small)
+  const MAX = 80;
+  if (nav.history.length > MAX) nav.history.splice(0, nav.history.length - MAX);
+  nav.index = nav.history.length - 1;
+}
+
+function __navRememberRecent(entry){
+  const nav = state.ui.nav = state.ui.nav || { recent: [] };
+  const r = nav.recent || [];
+  const key = `${entry.kind}:${entry.id}`;
+  const filtered = r.filter(x=>`${x.kind}:${x.id}` !== key);
+  filtered.unshift({ ...entry, at: nowISO() });
+  nav.recent = filtered.slice(0, 12);
+}
+
+// TS: record navigation into both recents + history (unless we are applying history).
+function navRecord(entry){
+  __navRememberRecent(entry);
+  if (!__NAV_APPLY) navHistPush(entry);
+}
+
+function navApplyEntry(entry){
+  if (!entry) return;
+  __NAV_APPLY = true;
+  try{
+    if (entry.kind === "entity") navJumpEntity(entry.id);
+    else if (entry.kind === "character") navGoCharacter(entry.id);
+    else if (entry.kind === "rule") navGoRule(entry.id);
+    else if (entry.kind === "pack") navGoPack(entry.id);
+    else if (entry.kind === "mode") setMode(entry.id);
+  } finally {
+    __NAV_APPLY = false;
+  }
+}
+
+function navBack(){
+  const nav = state.ui.nav;
+  if (!nav || !Array.isArray(nav.history)) return;
+  if ((nav.index||0) <= 0) return;
+  nav.index = nav.index - 1;
+  navApplyEntry(nav.history[nav.index]);
+  saveState(); renderPreserveFocus();
+}
+function navForward(){
+  const nav = state.ui.nav;
+  if (!nav || !Array.isArray(nav.history)) return;
+  if ((nav.index||-1) >= nav.history.length - 1) return;
+  nav.index = nav.index + 1;
+  navApplyEntry(nav.history[nav.index]);
+  saveState(); renderPreserveFocus();
+}
+
+function navGoIndex(idx){
+  const nav = state.ui.nav;
+  if (!nav || !Array.isArray(nav.history)) return;
+  const i = Number(idx);
+  if (!Number.isFinite(i)) return;
+  if (i < 0 || i >= nav.history.length) return;
+  nav.index = i;
+  navApplyEntry(nav.history[i]);
+  saveState(); renderPreserveFocus();
+}
+
+// TS: jump helpers
+function navGoEntity(id){
+  navJumpEntity(id);
+}
+function navGoCharacter(id){
+  const c = (state.characters.list||[]).find(x=>x && x.id===id);
+  if (!c) return;
+  state.ui.mode = "build";
+  state.ui.tab = "chars";
+  state.characters.selectedId = id;
+  navRecord({kind:"character", id, label:c.name, sub:"character"});
+  saveState(); renderPreserveFocus();
+}
+function navGoRule(ruleId){
+  state.sim = state.sim || {};
+  state.sim.ui = state.sim.ui || {};
+  state.ui.mode = "meta";
+  state.ui.tab = "sim";
+  state.sim.ui.ruleFilter = ruleId;
+  navRecord({kind:"rule", id:ruleId, label:ruleId, sub:"rule"});
+  saveState(); renderPreserveFocus();
+}
+function navGoPack(packId){
+  state.sim = state.sim || {};
+  state.sim.ui = state.sim.ui || {};
+  state.ui.mode = "meta";
+  state.ui.tab = "sim";
+  state.sim.ui.packFilter = packId;
+  navRecord({kind:"pack", id:packId, label:packId, sub:"pack"});
+  saveState(); renderPreserveFocus();
+}
+
 // TS: central mode setter (streamlines navigation without removing power features)
 function setMode(mode){
   const m = String(mode||"run");
@@ -5266,8 +5388,11 @@ function renderNavBars(){
 
   const focus = el("input",{type:"checkbox"});
   focus.checked = !!state.ui.focusMode;
-  focus.onchange = ()=>{ state.ui.focusMode = focus.checked;     navRecord({kind:"entity", id: entityId, label: (e.name||"(unnamed)"), sub:`Entity · ${e.typeId}`});
-saveState(); renderPreserveFocus(); };
+  focus.onchange = ()=>{
+    state.ui.focusMode = focus.checked;
+    saveState();
+    renderPreserveFocus();
+  };
 
   modeEl.appendChild(el("div",{class:"contextGroup"},[
     ...UIMODES.map(x=>{
@@ -5337,125 +5462,6 @@ saveState(); renderPreserveFocus(); };
   if (typeof state.ui.navQuery !== "string") state.ui.navQuery = "";
 
   
-  // -------------------- NAV: History + Breadcrumbs (Sprint 19) --------------------
-  // TS: We keep a tiny, explainable navigation history so "Back" feels app-native.
-  // The history is linear (like a browser): jumping after going back truncates the forward stack.
-  let __NAV_APPLY = false; // guards against recursive history writes while applying history entries
-
-  /**
-   * TS: @typedef {Object} NavEntry
-   * @property {"entity"|"character"|"rule"|"pack"|"mode"} kind
-   * @property {string} id
-   * @property {string} label
-   * @property {string=} sub
-   * @property {string=} at  ISO timestamp
-   */
-
-  function navHistPush(entry){
-    const nav = state.ui.nav = state.ui.nav || { recent: [] };
-    nav.history = Array.isArray(nav.history) ? nav.history : [];
-    nav.index = (typeof nav.index === "number") ? nav.index : (nav.history.length ? nav.history.length - 1 : -1);
-
-    const cur = nav.history[nav.index];
-    if (cur && cur.kind === entry.kind && cur.id === entry.id) return;
-
-    // truncate forward stack
-    if (nav.index < nav.history.length - 1) nav.history = nav.history.slice(0, nav.index + 1);
-
-    nav.history.push({ ...entry, at: nowISO() });
-
-    // cap (keep UI snappy + storage small)
-    const MAX = 80;
-    if (nav.history.length > MAX) nav.history.splice(0, nav.history.length - MAX);
-    nav.index = nav.history.length - 1;
-  }
-
-  function navApplyEntry(entry){
-    if (!entry) return;
-    __NAV_APPLY = true;
-    try{
-      if (entry.kind === "entity") navJumpEntity(entry.id);
-      else if (entry.kind === "character") navGoCharacter(entry.id);
-      else if (entry.kind === "rule") navGoRule(entry.id);
-      else if (entry.kind === "pack") navGoPack(entry.id);
-      else if (entry.kind === "mode") setMode(entry.id);
-    } finally {
-      __NAV_APPLY = false;
-    }
-  }
-
-  function navBack(){
-    const nav = state.ui.nav;
-    if (!nav || !Array.isArray(nav.history)) return;
-    if ((nav.index||0) <= 0) return;
-    nav.index = nav.index - 1;
-    navApplyEntry(nav.history[nav.index]);
-    saveState(); renderPreserveFocus();
-  }
-  function navForward(){
-    const nav = state.ui.nav;
-    if (!nav || !Array.isArray(nav.history)) return;
-    if ((nav.index||-1) >= nav.history.length - 1) return;
-    nav.index = nav.index + 1;
-    navApplyEntry(nav.history[nav.index]);
-    saveState(); renderPreserveFocus();
-  }
-
-  function navGoIndex(idx){
-    const nav = state.ui.nav;
-    if (!nav || !Array.isArray(nav.history)) return;
-    const i = Number(idx);
-    if (!Number.isFinite(i)) return;
-    if (i < 0 || i >= nav.history.length) return;
-    nav.index = i;
-    navApplyEntry(nav.history[i]);
-    saveState(); renderPreserveFocus();
-  }
-
-// TS: push recent navigation; keep it small + de-duped
-  function __navRememberRecent(entry){
-    const r = state.ui.nav.recent || [];
-    const key = `${entry.kind}:${entry.id}`;
-    const filtered = r.filter(x=>`${x.kind}:${x.id}` !== key);
-    filtered.unshift({ ...entry, at: nowISO() });
-    state.ui.nav.recent = filtered.slice(0, 12);
-  }
-  // TS: record navigation into both recents + history (unless we are applying history).
-  function navRecord(entry){
-    __navRememberRecent(entry);
-    if (!__NAV_APPLY) navHistPush(entry);
-  }
-
-
-
-  // TS: jump helpers
-  function navGoEntity(id){
-    navJumpEntity(id);
-  }
-  function navGoCharacter(id){
-    const c = (state.characters.list||[]).find(x=>x && x.id===id);
-    if (!c) return;
-    state.ui.mode = "build";
-    state.ui.tab = "chars";
-    state.characters.selectedId = id;
-    navRecord({kind:"character", id, label:c.name, sub:"character"});
-    saveState(); renderPreserveFocus();
-  }
-  function navGoRule(ruleId){
-    state.ui.mode = "meta";
-    state.ui.tab = "sim";
-    state.sim.ui.ruleFilter = ruleId;
-    navRecord({kind:"rule", id:ruleId, label:ruleId, sub:"rule"});
-    saveState(); renderPreserveFocus();
-  }
-  function navGoPack(packId){
-    state.ui.mode = "meta";
-    state.ui.tab = "sim";
-    state.sim.ui.packFilter = packId;
-    navRecord({kind:"pack", id:packId, label:packId, sub:"pack"});
-    saveState(); renderPreserveFocus();
-  }
-
   // Recents chips
   if (state.ui.nav.recent.length){
     const row = el("div",{class:"recentRow"});
@@ -5698,6 +5704,24 @@ function renderDocs(){
       "Core modules: Quant (numbers), Roller (weighted picks), Wheel (visual spin), SkillGen (skill defaults), migrateState (schema safety).",
       "Rule of thumb: when you add a new field to state, also add migration + defaults."
     ]},
+    {id:"direction", title:"Product direction (core identity)", body:[
+      "Core loop: Graph → Rules → Tick → Diff → Explain → Patch → Iterate.",
+      "Core identity is the graph workbench; crafting/market/reputation live in packs.",
+      "Every UI should answer: What changed? Why? How do I alter the system?"
+    ]},
+    {id:"modes", title:"Modes (primary UX)", body:[
+      "Build: create entities + link them, guided checklist.",
+      "Run: tick, observe diffs, spot runaway behavior.",
+      "Trade: finalize/quote/sell, see rep/fame effects.",
+      "Debug: events, inspector, patch tools, rule toggles.",
+      "Meta: packs, unlocks, objectives, settings.",
+      "Rule: in each mode show only the 2–3 panels that matter; everything else collapses behind Advanced."
+    ]},
+    {id:"architecture", title:"Architecture split (core vs packs)", body:[
+      "Core (permanent): Entity store + schema index; Link system + GraphIndex; Tick engine + event log + diff; Rule engine + effect system; Pack manager; Navigation layer (modes/search/history/context); Debug tools.",
+      "Packs (content/gameplay): Crafting, Market/Economy, Reputation/Fame, Ecology, Class/Skill, plus future factions/quests/war/religion.",
+      "Avoid hardcoding gameplay logic in core; if it’s not navigation/engine/debug tooling, it belongs in a pack."
+    ]},
     {id:"state", title:"State shape (high level)", body:[
       "state.index: definitions (entity types, tags, facet sets, templates, conflicts).",
       "state.world.entities: the library database (biomes, monsters, skills, etc).",
@@ -5736,7 +5760,7 @@ function renderDocs(){
       "“Add a new computed number” → module function + render panel + keep it derivable (no duplicate source of truth).",
       "“Make something rollable” → wrap as options + call Roller + persist only what you need (locks/history)."
     ]},
-,{id:"modules", title:"Module Index (pre-sprints)", body:[
+    {id:"modules", title:"Module Index (pre-sprints)", body:[
       'Purpose: keep future game features modular and debuggable.',
       'Core rule: ONLY WorldMutator writes to state; everything else emits events + returns plans.',
       'Every mutation MUST emit an event with ruleId + target refs + delta/before/after.',
