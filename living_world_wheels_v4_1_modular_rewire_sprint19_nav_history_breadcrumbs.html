@@ -5698,6 +5698,24 @@ function renderDocs(){
       "Core modules: Quant (numbers), Roller (weighted picks), Wheel (visual spin), SkillGen (skill defaults), migrateState (schema safety).",
       "Rule of thumb: when you add a new field to state, also add migration + defaults."
     ]},
+    {id:"direction", title:"Product direction (core identity)", body:[
+      "Core loop: Graph → Rules → Tick → Diff → Explain → Patch → Iterate.",
+      "Core identity is the graph workbench; crafting/market/reputation live in packs.",
+      "Every UI should answer: What changed? Why? How do I alter the system?"
+    ]},
+    {id:"modes", title:"Modes (primary UX)", body:[
+      "Build: create entities + link them, guided checklist.",
+      "Run: tick, observe diffs, spot runaway behavior.",
+      "Trade: finalize/quote/sell, see rep/fame effects.",
+      "Debug: events, inspector, patch tools, rule toggles.",
+      "Meta: packs, unlocks, objectives, settings.",
+      "Rule: in each mode show only the 2–3 panels that matter; everything else collapses behind Advanced."
+    ]},
+    {id:"architecture", title:"Architecture split (core vs packs)", body:[
+      "Core (permanent): Entity store + schema index; Link system + GraphIndex; Tick engine + event log + diff; Rule engine + effect system; Pack manager; Navigation layer (modes/search/history/context); Debug tools.",
+      "Packs (content/gameplay): Crafting, Market/Economy, Reputation/Fame, Ecology, Class/Skill, plus future factions/quests/war/religion.",
+      "Avoid hardcoding gameplay logic in core; if it’s not navigation/engine/debug tooling, it belongs in a pack."
+    ]},
     {id:"state", title:"State shape (high level)", body:[
       "state.index: definitions (entity types, tags, facet sets, templates, conflicts).",
       "state.world.entities: the library database (biomes, monsters, skills, etc).",
@@ -5736,7 +5754,7 @@ function renderDocs(){
       "“Add a new computed number” → module function + render panel + keep it derivable (no duplicate source of truth).",
       "“Make something rollable” → wrap as options + call Roller + persist only what you need (locks/history)."
     ]},
-,{id:"modules", title:"Module Index (pre-sprints)", body:[
+    {id:"modules", title:"Module Index (pre-sprints)", body:[
       'Purpose: keep future game features modular and debuggable.',
       'Core rule: ONLY WorldMutator writes to state; everything else emits events + returns plans.',
       'Every mutation MUST emit an event with ruleId + target refs + delta/before/after.',
