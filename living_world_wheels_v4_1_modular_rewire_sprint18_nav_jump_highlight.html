@@ -30,6 +30,12 @@
       30%  { transform: scale(1.01); box-shadow: 0 0 0 6px rgba(0,0,0,0.12); background: #fafafa; }
       100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0,0,0,0.0); background: #fff; }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .item.flash {
+        animation: none;
+        box-shadow: none;
+      }
+    }
 label { font-size: 12px; color:#444; }
     input, select, textarea, button { font: inherit; }
     input, select, textarea { width: 100%; padding: 9px; border-radius: 12px; border:1px solid #ddd; }
