@@ -30,6 +30,12 @@
       30%  { transform: scale(1.01); box-shadow: 0 0 0 6px rgba(0,0,0,0.12); background: #fafafa; }
       100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0,0,0,0.0); background: #fff; }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .item.flash {
+        animation: none;
+        box-shadow: none;
+      }
+    }
 label { font-size: 12px; color:#444; }
     input, select, textarea, button { font: inherit; }
     input, select, textarea { width: 100%; padding: 9px; border-radius: 12px; border:1px solid #ddd; }
@@ -88,6 +94,13 @@ details summary { cursor:pointer; }
     .navSearch { padding:6px 10px; border-radius:999px; border:1px solid #ddd; background:#fff; font-size:12px; min-width:240px; }
     .recentRow { display:flex; gap:6px; flex-wrap:wrap; }
 
+    /* -------------------- NAV: History + Breadcrumbs (Sprint 19) -------------------- */
+    .navCrumbs { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
+    .crumb { font-size:12px; padding:4px 8px; border:1px solid #ddd; border-radius:999px; background:#fff; }
+    .crumb.active { background:#222; color:#fff; border-color:#222; }
+    .crumbSep { color:#999; font-size:12px; padding:0 2px; }
+    .navNavBtn { padding:4px 8px; border-radius:8px; border:1px solid #ddd; background:#fff; font-size:12px; }
+    .navNavBtn:disabled { opacity:0.45; }
   </style>
 </head>
 <body>
@@ -166,15 +179,6 @@ function computeQuantCached(entity) {
   return result;
 }
 const $ = (q) => document.querySelector(q);
-
-
-    /* -------------------- NAV: History + Breadcrumbs (Sprint 19) -------------------- */
-    .navCrumbs { display:flex; gap:6px; align-items:center; flex-wrap:wrap; }
-    .crumb { font-size:12px; padding:4px 8px; border:1px solid #ddd; border-radius:999px; background:#fff; }
-    .crumb.active { background:#222; color:#fff; border-color:#222; }
-    .crumbSep { color:#999; font-size:12px; padding:0 2px; }
-    .navNavBtn { padding:4px 8px; border-radius:8px; border:1px solid #ddd; background:#fff; font-size:12px; }
-    .navNavBtn:disabled { opacity:0.45; }
 /** -------------------- GENERIC WHEEL MODAL (for any rollable action) -------------------- */
 function ensureWheelModal(){
   let wrap = document.getElementById("wheelModal");
